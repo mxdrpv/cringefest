@@ -13,6 +13,9 @@ async function startGame(ctx, bot) {
   const prompt = prompts[Math.floor(Math.random() * prompts.length)]
   session.prompt = prompt
   session.phase = 'answering'
+  session.players = [                             // И ЭТО
+  { id: ctx.from.id, name: ctx.from.first_name },  // ВРЕМЕННО ДЛЯ МЕНЯ, ПОТОМ УБЕРУ
+]
 
   for (const player of session.players) {
     bot.telegram.sendMessage(player.id, `📝 Задание:
