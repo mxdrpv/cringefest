@@ -1,43 +1,53 @@
-const express = require('express')
-const bodyParser = require('body-parser')
-const { Telegraf } = require('telegraf')
-const { token } = require('./config')
-const { startGame, handleAnswer, handleVote } = require('./gameManager')
+const express = require('express');
+const bodyParser = require('body-parser');
+const { Telegraf } = require('telegraf');
+const { token } = require('./config');
+const { startGame, handleJoin, beginGame, handleAnswer, handleVote } = require('./gameManager');
 
-const app = express()
-const bot = new Telegraf(token)
+const app = express();
+const bot = new Telegraf(token);
 
 // Webhook
-const webhookUrl = process.env.WEBHOOK_URL || 'https://cringefest.onrender.com'
-bot.telegram.setWebhook(webhookUrl)
-app.use(bodyParser.json())
+const webhookUrl = process.env.WEBHOOK_URL || 'https://cringefest.onrender.com';
+bot.telegram.setWebhook(webhookUrl);
+app.use(bodyParser.json());
 app.post('/', (req, res) => {
-  bot.handleUpdate(req.body, res)
-  res.send('ok')
-})
+  bot.handleUpdate(req.body, res);
+  res.send('ok');
+});
 
 // Старт игры из чата
 bot.command('start_cringe', async (ctx) => {
-  await startGame(ctx, bot)
-})
+  await startGame(ctx, bot);
+});
+
+// Обработка присоединения игроков
+bot.action('join_game', async (ctx) => {
+  await handleJoin(ctx);
+});
+
+// Начало игры
+bot.action('begin_game', async (ctx) => {
+  await beginGame(ctx, bot);
+});
 
 // Обработка ответов игроков в ЛС
 bot.on('text', async (ctx) => {
   if (ctx.chat.type === 'private') {
-    await handleAnswer(ctx)
+    await handleAnswer(ctx);
   }
-})
+});
 
-// Обработка голосов (inline кнопки)
+// Обработка голосования
 bot.action(/vote_(\d+)/, async (ctx) => {
-  await handleVote(ctx)
-})
+  await handleVote(ctx);
+});
 
 // Простой старт
-bot.start((ctx) => ctx.reply('Добро пожаловать в Кринж-Фест! Напиши /start_cringe в групповом чате, чтобы начать игру.'))
+bot.start((ctx) => ctx.reply('Добро пожаловать в Кринж-Фест! Напиши /start_cringe в групповом чате, чтобы начать игру.'));
 
 // Запуск
-const port = process.env.PORT || 3000
+const port = process.env.PORT || 3000;
 app.listen(port, () => {
-  console.log(`Server is running on port ${port}`)
-})
+  console.log(`Server is running on port ${port}`);
+});
