@@ -1,35 +1,43 @@
-const express = require('express');
-const bodyParser = require('body-parser');
-const { Telegraf } = require('telegraf');
-const { token } = require('./config');
+const express = require('express')
+const bodyParser = require('body-parser')
+const { Telegraf } = require('telegraf')
+const { token } = require('./config')
+const { startGame, handleAnswer, handleVote } = require('./gameManager')
 
-const app = express();
-const bot = new Telegraf(token);
+const app = express()
+const bot = new Telegraf(token)
 
-// Настроим webhook
-const webhookUrl = process.env.WEBHOOK_URL || 'https://cringefest.onrender.com';
-bot.telegram.setWebhook(webhookUrl);
-
-// Обработчик обновлений
-app.use(bodyParser.json());
-
+// Webhook
+const webhookUrl = process.env.WEBHOOK_URL || 'https://cringefest.onrender.com'
+bot.telegram.setWebhook(webhookUrl)
+app.use(bodyParser.json())
 app.post('/', (req, res) => {
-  bot.handleUpdate(req.body, res);
-  res.send('ok');
-});
+  bot.handleUpdate(req.body, res)
+  res.send('ok')
+})
 
-// Пример простой команды
-bot.start((ctx) => ctx.reply('Добро пожаловать в Кринж-Фест! Напишите /start_cringe для начала игры.'));
-
+// Старт игры из чата
 bot.command('start_cringe', async (ctx) => {
-  const chatId = ctx.chat.id;
-  // Твоя логика для старта игры
-  await ctx.reply('🚀 Игра начинается! Напиши свой кринжовый ответ в ЛС боту!');
-  // Здесь будет дальше идти твой код для игры
-});
+  await startGame(ctx, bot)
+})
 
-// Запуск сервера
-const port = process.env.PORT || 3000;
+// Обработка ответов игроков в ЛС
+bot.on('text', async (ctx) => {
+  if (ctx.chat.type === 'private') {
+    await handleAnswer(ctx)
+  }
+})
+
+// Обработка голосов (inline кнопки)
+bot.action(/vote_(\d+)/, async (ctx) => {
+  await handleVote(ctx)
+})
+
+// Простой старт
+bot.start((ctx) => ctx.reply('Добро пожаловать в Кринж-Фест! Напиши /start_cringe в групповом чате, чтобы начать игру.'))
+
+// Запуск
+const port = process.env.PORT || 3000
 app.listen(port, () => {
-  console.log(`Server is running on port ${port}`);
-});
+  console.log(`Server is running on port ${port}`)
+})
