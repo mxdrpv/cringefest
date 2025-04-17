@@ -1,14 +1,35 @@
-const { Telegraf, Markup } = require('telegraf')
-const { startGame, handleAnswer, handleVote } = require('./gameManager')
-const { token } = require('./config')
+const express = require('express');
+const bodyParser = require('body-parser');
+const { Telegraf } = require('telegraf');
+const { token } = require('./config');
 
-const bot = new Telegraf(token)
+const app = express();
+const bot = new Telegraf(token);
 
-bot.command('start_cringe', (ctx) => startGame(ctx, bot))
+// Настроим webhook
+const webhookUrl = process.env.WEBHOOK_URL || 'https://cringefest.onrender.com';
+bot.telegram.setWebhook(webhookUrl);
 
-bot.on('text', (ctx) => handleAnswer(ctx))
+// Обработчик обновлений
+app.use(bodyParser.json());
 
-bot.action(/vote_(\d+)/, (ctx) => handleVote(ctx))
+app.post('/', (req, res) => {
+  bot.handleUpdate(req.body, res);
+  res.send('ok');
+});
 
-bot.launch()
-console.log('Cringe-Fest bot запущен 🚀')
+// Пример простой команды
+bot.start((ctx) => ctx.reply('Добро пожаловать в Кринж-Фест! Напишите /start_cringe для начала игры.'));
+
+bot.command('start_cringe', async (ctx) => {
+  const chatId = ctx.chat.id;
+  // Твоя логика для старта игры
+  await ctx.reply('🚀 Игра начинается! Напиши свой кринжовый ответ в ЛС боту!');
+  // Здесь будет дальше идти твой код для игры
+});
+
+// Запуск сервера
+const port = process.env.PORT || 3000;
+app.listen(port, () => {
+  console.log(`Server is running on port ${port}`);
+});
