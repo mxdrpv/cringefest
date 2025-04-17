@@ -79,8 +79,10 @@ async function beginGame(ctx, bot) {
 
   await ctx.answerCbQuery('Игра стартовала! Смотри ЛС.')
   // Сообщение о рассылке заданий, сохраняем для удаления
-  const taskMsg = await ctx.telegram.sendMessage(chatId, '📝 Задание разослано игрокам в ЛС!\n\nУчастники:\n' +
-    session.players.map((p, i) => `${i+1}. ${p.name}`).join('\n')
+  const taskMsg = await ctx.telegram.sendMessage(
+    chatId,
+    '📝 Задание разослано игрокам в ЛС!\n\nУчастники:\n' +
+      session.players.map((p, i) => `${i + 1}. ${p.name}`).join('\n')
   )
   session.taskMessage = { chatId, messageId: taskMsg.message_id }
 
@@ -119,8 +121,8 @@ async function publishAnswers(chatId, bot) {
   const session = store.getSession(chatId)
 
   // Удаляем сообщение о рассылке заданий
-  if (session.taskMessage) {
-    await bot.telegram.deleteMessage(session.taskMessage.chatId, session.taskMessage.message_id)
+  if (session.taskMessage && session.taskMessage.messageId) {
+    await bot.telegram.deleteMessage(session.taskMessage.chatId, session.taskMessage.messageId).catch(() => {})
   }
 
   session.phase = 'voting'
@@ -132,14 +134,14 @@ async function publishAnswers(chatId, bot) {
     text += `\n${i + 1}. ${a.text}`
   })
 
-  const buttons = session.answers.map((_, i) => [Markup.button.callback(`${i+1}`, `vote_${i}`)])
+  const buttons = session.answers.map((_, i) => [Markup.button.callback(`${i + 1}`, `vote_${i}`)])
   const msg = await bot.telegram.sendMessage(chatId, text, Markup.inlineKeyboard(buttons))
   session.voteMessage = { chatId, messageId: msg.message_id }
 
   // Завершение голосования автоматически через 30 секунд
   setTimeout(() => {
-    if (session.phase === 'voting') {
-      bot.telegram.deleteMessage(session.voteMessage.chatId, session.voteMessage.message_id).catch(() => {})
+    if (session.phase === 'voting' && session.voteMessage.messageId) {
+      bot.telegram.deleteMessage(session.voteMessage.chatId, session.voteMessage.messageId).catch(() => {})
       countVotes(session.voteMessage, bot)
     }
   }, 30000)
@@ -171,15 +173,15 @@ async function handleVote(ctx) {
   })
   await ctx.telegram.editMessageText(
     session.voteMessage.chatId,
-    session.voteMessage.message_id,
+    session.voteMessage.messageId,
     null,
     updated,
-    Markup.inlineKeyboard(session.answers.map((_, i) => [Markup.button.callback(`${i+1}`, `vote_${i}`)]))
+    Markup.inlineKeyboard(session.answers.map((_, i) => [Markup.button.callback(`${i + 1}`, `vote_${i}`)]))
   )
 
   // Если все проголосовали, сразу считаем и удаляем сообщение голосования
   if (Object.keys(session.votes).length === session.players.length) {
-    await ctx.telegram.deleteMessage(session.voteMessage.chatId, session.voteMessage.message_id).catch(() => {})
+    await ctx.telegram.deleteMessage(session.voteMessage.chatId, session.voteMessage.messageId).catch(() => {})
     countVotes(session.voteMessage, ctx.telegram)
   }
 }
