@@ -1,35 +1,82 @@
 const prompts = require('./prompts')
 const store = require('./sessionStore')
 const { shuffle } = require('./utils')
+const { Markup } = require('telegraf')
 
 async function startGame(ctx, bot) {
   const chatId = ctx.chat.id
   store.createSession(chatId)
   const session = store.getSession(chatId)
-  session.players = [
-    { id: ctx.from.id, name: ctx.from.first_name }, // ты
-  ]
+  session.players = []
+  session.phase = 'joining'
+  session.prompt = null
+  session.answers = []
+  session.votes = {}
+  session.scores = {}
 
+  await ctx.reply(
+    `🔥 КРИНЖ-ФЕСТ НАЧИНАЕТСЯ!
+Нажимай кнопку ниже, чтобы вступить в игру. Ждём игроков...`,
+    Markup.inlineKeyboard([
+      [Markup.button.callback('🙋 Вступить в игру', 'join_game')],
+      [Markup.button.callback('🚀 Начать', 'begin_game')]
+    ])
+  )
+}
 
-  await ctx.reply(`🧻 КРИНЖ-ФЕСТ НАЧИНАЕТСЯ! Пиши в ЛС боту, чтобы участвовать.`)
+async function handleJoin(ctx) {
+  const chatId = ctx.chat.id
+  const userId = ctx.from.id
+  const username = ctx.from.first_name
 
+  const session = store.getSession(chatId)
+  if (!session || session.phase !== 'joining') return
+
+  const alreadyJoined = session.players.some(p => p.id === userId)
+  if (!alreadyJoined) {
+    session.players.push({ id: userId, name: username })
+    await ctx.answerCbQuery('Ты в игре!')
+    await ctx.reply(`${username} вступил(а) в игру!`)
+  } else {
+    await ctx.answerCbQuery('Ты уже в игре!')
+  }
+}
+
+async function beginGame(ctx, bot) {
+  const chatId = ctx.chat.id
+  const session = store.getSession(chatId)
+  if (!session || session.phase !== 'joining') return
+
+  if (session.players.length < 3) {
+    return ctx.answerCbQuery('Нужно хотя бы 3 игрока!')
+  }
+
+  session.phase = 'answering'
   const prompt = prompts[Math.floor(Math.random() * prompts.length)]
   session.prompt = prompt
-  session.phase = 'answering'
-	
+  session.answers = []
+  session.votes = {}
+  session.scores = {}
+
+  await bot.telegram.sendMessage(chatId, '📝 Задание разослано игрокам в ЛС!')
+
   for (const player of session.players) {
-    bot.telegram.sendMessage(player.id, `📝 Задание:
+    try {
+      await bot.telegram.sendMessage(player.id, `📝 Задание:
 ${prompt}
 
 Отправь мне свой кринж-ответ в течение 60 секунд.`)
+    } catch (e) {
+      await bot.telegram.sendMessage(chatId, `❌ ${player.name}, я не смог отправить тебе задание. Разреши мне писать в ЛС.`)
+    }
   }
 
   setTimeout(() => publishAnswers(chatId, bot), 60000)
 }
 
 async function handleAnswer(ctx) {
-  const session = Object.values(store).find((s) => s?.players?.some((p) => p.id === ctx.from.id))
-  if (!session || session.phase !== 'answering') return
+  const session = Object.values(store.sessions).find((s) => s?.players?.some((p) => p.id === ctx.from.id) && s.phase === 'answering')
+  if (!session) return
 
   const player = session.players.find(p => p.id === ctx.from.id)
   if (session.answers.some(a => a.id === player.id)) return
@@ -74,39 +121,7 @@ async function handleVote(ctx) {
     countVotes(chatId, bot)
   }
 }
-async function startGame(ctx, bot) {
-  const chatId = ctx.chat.id
-  store.createSession(chatId)
-  const session = store.getSession(chatId)
-  session.players.push({ id: ctx.from.id, name: ctx.from.first_name })
 
-  await ctx.reply(`🧻 КРИНЖ-ФЕСТ НАЧИНАЕТСЯ! Пиши в ЛС боту, чтобы участвовать.`)
-
-  const prompt = prompts[Math.floor(Math.random() * prompts.length)]
-  session.prompt = prompt
-  session.phase = 'answering'
-
-  for (const player of session.players) {
-    bot.telegram.sendMessage(player.id, `📝 Задание:\n${prompt}\n\nОтправь мне свой кринж-ответ в течение 60 секунд.`)
-  }
-
-  // Запускаем таймер на 60 секунд
-  setTimeout(() => publishAnswers(chatId, bot), 60000)
-}
-
-async function publishAnswers(chatId, bot) {
-  const session = store.getSession(chatId)
-  session.phase = 'voting'
-  session.answers = shuffle(session.answers)
-
-  let message = `🗳 Голосование началось! Выбери самый кринжовый ответ:`
-  session.answers.forEach((a, i) => {
-    message += `\n${i + 1}. ${a.text}`
-  })
-  const buttons = session.answers.map((_, i) => [Markup.button.callback(`${i + 1}`, `vote_${i}`)])
-
-  bot.telegram.sendMessage(chatId, message, Markup.inlineKeyboard(buttons))
-}
 function countVotes(chatId, bot) {
   const session = store.getSession(chatId)
   session.phase = 'finished'
@@ -129,4 +144,4 @@ function countVotes(chatId, bot) {
   bot.telegram.sendMessage(chatId, `👑 Кринж-король раунда: ${winner.name} с ${max} голосами!`)
 }
 
-module.exports = { startGame, handleAnswer, handleVote }
+module.exports = { startGame, handleJoin, beginGame, handleAnswer, handleVote }
