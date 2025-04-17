@@ -1,19 +1,28 @@
-const sessions = {}
-module.exports = {
-  createSession(chatId) {
-    sessions[chatId] = {
-      players: [],
-      prompt: '',
-      answers: [],
-      votes: {},
-      scores: {},
-      phase: 'waiting'
-    }
-  },
-  getSession(chatId) {
-    return sessions[chatId]
-  },
-  updateSession(chatId, data) {
-    Object.assign(sessions[chatId], data)
-  }
+// sessionStore.js
+const sessions = {};
+
+function createSession(chatId) {
+  sessions[chatId] = {
+    players: [],
+    phase: null,
+    prompt: null,
+    answers: [],
+    votes: {},
+    scores: {}
+  };
 }
+
+function getSession(chatId) {
+  return sessions[chatId];
+}
+
+function getAllSessions() {
+  return sessions;
+}
+
+module.exports = {
+  sessions,
+  createSession,
+  getSession,
+  getAllSessions
+};

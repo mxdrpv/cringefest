@@ -1,3 +1,4 @@
+// index.js
 const express = require('express');
 const bodyParser = require('body-parser');
 const { Telegraf } = require('telegraf');
@@ -7,47 +8,20 @@ const { startGame, handleJoin, beginGame, handleAnswer, handleVote } = require('
 const app = express();
 const bot = new Telegraf(token);
 
-// Webhook
-const webhookUrl = process.env.WEBHOOK_URL || 'https://cringefest.onrender.com';
-bot.telegram.setWebhook(webhookUrl);
+// Webhook (Render автоматически выдаёт HTTPS URL)
+const webhookUrl = process.env.WEBHOOK_URL;
+bot.telegram.setWebhook(`${webhookUrl}/`);
 app.use(bodyParser.json());
-app.post('/', (req, res) => {
-  bot.handleUpdate(req.body, res);
-  res.send('ok');
-});
+app.post('/', (req, res) => bot.handleUpdate(req.body, res) && res.send('ok'));
 
-// Старт игры из чата
-bot.command('start_cringe', async (ctx) => {
-  await startGame(ctx, bot);
-});
+// Команды и кнопки
+bot.start(ctx => ctx.reply('Добро пожаловать! /start_cringe в групповом чате'));
+bot.command('start_cringe', ctx => startGame(ctx, bot));
+bot.action('join_game', ctx => handleJoin(ctx));
+bot.action('begin_game', ctx => beginGame(ctx, bot));
+bot.on('text', ctx => ctx.chat.type === 'private' && handleAnswer(ctx));
+bot.action(/vote_(\d+)/, ctx => handleVote(ctx));
 
-// Обработка присоединения игроков
-bot.action('join_game', async (ctx) => {
-  await handleJoin(ctx);
-});
-
-// Начало игры
-bot.action('begin_game', async (ctx) => {
-  await beginGame(ctx, bot);
-});
-
-// Обработка ответов игроков в ЛС
-bot.on('text', async (ctx) => {
-  if (ctx.chat.type === 'private') {
-    await handleAnswer(ctx);
-  }
-});
-
-// Обработка голосования
-bot.action(/vote_(\d+)/, async (ctx) => {
-  await handleVote(ctx);
-});
-
-// Простой старт
-bot.start((ctx) => ctx.reply('Добро пожаловать в Кринж-Фест! Напиши /start_cringe в групповом чате, чтобы начать игру.'));
-
-// Запуск
+// Поднимаем сервер
 const port = process.env.PORT || 3000;
-app.listen(port, () => {
-  console.log(`Server is running on port ${port}`);
-});
+app.listen(port, () => console.log(`Server on ${port}`));
