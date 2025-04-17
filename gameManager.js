@@ -71,7 +71,39 @@ async function handleVote(ctx) {
     countVotes(chatId, bot)
   }
 }
+async function startGame(ctx, bot) {
+  const chatId = ctx.chat.id
+  store.createSession(chatId)
+  const session = store.getSession(chatId)
+  session.players.push({ id: ctx.from.id, name: ctx.from.first_name })
 
+  await ctx.reply(`🧻 КРИНЖ-ФЕСТ НАЧИНАЕТСЯ! Пиши в ЛС боту, чтобы участвовать.`)
+
+  const prompt = prompts[Math.floor(Math.random() * prompts.length)]
+  session.prompt = prompt
+  session.phase = 'answering'
+
+  for (const player of session.players) {
+    bot.telegram.sendMessage(player.id, `📝 Задание:\n${prompt}\n\nОтправь мне свой кринж-ответ в течение 60 секунд.`)
+  }
+
+  // Запускаем таймер на 60 секунд
+  setTimeout(() => publishAnswers(chatId, bot), 60000)
+}
+
+async function publishAnswers(chatId, bot) {
+  const session = store.getSession(chatId)
+  session.phase = 'voting'
+  session.answers = shuffle(session.answers)
+
+  let message = `🗳 Голосование началось! Выбери самый кринжовый ответ:`
+  session.answers.forEach((a, i) => {
+    message += `\n${i + 1}. ${a.text}`
+  })
+  const buttons = session.answers.map((_, i) => [Markup.button.callback(`${i + 1}`, `vote_${i}`)])
+
+  bot.telegram.sendMessage(chatId, message, Markup.inlineKeyboard(buttons))
+}
 function countVotes(chatId, bot) {
   const session = store.getSession(chatId)
   session.phase = 'finished'
