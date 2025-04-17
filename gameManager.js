@@ -15,7 +15,7 @@ async function startGame(ctx) {
   session.votes = {}
   session.scores = {}
 
-  // Сохраняем исходное сообщение, чтобы потом редактировать
+  // Сохраняем исходное сообщение, чтобы потом редактировать или удалять
   const msg = await ctx.reply(
     `🔥 КРИНЖ-ФЕСТ НАЧИНАЕТСЯ!\nНажимай кнопку ниже, чтобы вступить в игру. Ждём игроков...`,
     Markup.inlineKeyboard([
@@ -68,6 +68,9 @@ async function beginGame(ctx) {
     return ctx.answerCbQuery('Нужно минимум 3 игрока!')
   }
 
+  // Удаляем сообщение набора игроков
+  await ctx.telegram.deleteMessage(session.joinMessage.chatId, session.joinMessage.messageId)
+
   session.phase = 'answering'
   session.prompt = prompts[Math.floor(Math.random() * prompts.length)]
   session.answers = []
@@ -75,7 +78,9 @@ async function beginGame(ctx) {
   session.scores = {}
 
   await ctx.answerCbQuery('Игра стартовала! Смотри ЛС.')
-  await ctx.telegram.sendMessage(chatId, '📝 Задание разослано игрокам в ЛС!')
+  // Сообщение о рассылке заданий, сохраняем для удаления
+  const taskMsg = await ctx.telegram.sendMessage(chatId, '📝 Задание разослано игрокам в ЛС!')
+  session.taskMessage = { chatId, messageId: taskMsg.message_id }
 
   // Отправляем в ЛС
   for (const p of session.players) {
@@ -90,7 +95,7 @@ async function beginGame(ctx) {
   }
 
   // Через 60 секунд публикуем ответы и запускаем голосование
-  setTimeout(() => publishAnswers(ctx), 60000)
+  setTimeout(() => publishAnswers(chatId), 60000)
 }
 
 // Приём ответов в личке
@@ -108,11 +113,13 @@ async function handleAnswer(ctx) {
 }
 
 // Публикация ответов и начало голосования, показываем и задание
-async function publishAnswers(ctx) {
-  // ctx может быть undefined, так что достаём через хранение
-  const chatId = typeof ctx === 'object' && ctx.chat ? ctx.chat.id : arguments[0]
-  const botCtx = typeof ctx === 'object' ? ctx : null
+async function publishAnswers(chatId) {
   const session = store.getSession(chatId)
+  const telegram = session.telegram || require('telegraf').telegram
+
+  // Удаляем сообщение о рассылке заданий
+  await telegram.deleteMessage(session.taskMessage.chatId, session.taskMessage.messageId)
+
   session.phase = 'voting'
   session.answers = shuffle(session.answers)
 
@@ -123,12 +130,12 @@ async function publishAnswers(ctx) {
   })
 
   const buttons = session.answers.map((_, i) => [Markup.button.callback(`${i+1}`, `vote_${i}`)])
-  const msg = await (botCtx ? botCtx.telegram.sendMessage(chatId, text, Markup.inlineKeyboard(buttons)) : null)
-  session.voteMessage = { chatId, messageId: msg ? msg.message_id : null }
+  const msg = await telegram.sendMessage(chatId, text, Markup.inlineKeyboard(buttons))
+  session.voteMessage = { chatId, messageId: msg.message_id }
 
   // Завершение голосования автоматически через 30 секунд
   setTimeout(() => {
-    if (session.phase === 'voting') countVotes(session.voteMessage, botCtx.telegram)
+    if (session.phase === 'voting') countVotes(session.voteMessage, telegram)
   }, 30000)
 }
 
@@ -164,8 +171,9 @@ async function handleVote(ctx) {
     Markup.inlineKeyboard(session.answers.map((_, i) => [Markup.button.callback(`${i+1}`, `vote_${i}`)]))
   )
 
-  // Если все проголосовали, сразу считаем
+  // Если все проголосовали, сразу считаем и удаляем голосование
   if (Object.keys(session.votes).length === session.players.length) {
+    await ctx.telegram.deleteMessage(session.voteMessage.chatId, session.voteMessage.messageId)
     countVotes(session.voteMessage, ctx.telegram)
   }
 }
