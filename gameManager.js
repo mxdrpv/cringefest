@@ -6,17 +6,17 @@ async function startGame(ctx, bot) {
   const chatId = ctx.chat.id
   store.createSession(chatId)
   const session = store.getSession(chatId)
-  session.players.push({ id: ctx.from.id, name: ctx.from.first_name })
+  session.players = [
+    { id: ctx.from.id, name: ctx.from.first_name }, // ты
+  ]
+
 
   await ctx.reply(`🧻 КРИНЖ-ФЕСТ НАЧИНАЕТСЯ! Пиши в ЛС боту, чтобы участвовать.`)
 
   const prompt = prompts[Math.floor(Math.random() * prompts.length)]
   session.prompt = prompt
   session.phase = 'answering'
-  session.players = [                             // И ЭТО
-  { id: ctx.from.id, name: ctx.from.first_name },  // ВРЕМЕННО ДЛЯ МЕНЯ, ПОТОМ УБЕРУ
-]
-
+	
   for (const player of session.players) {
     bot.telegram.sendMessage(player.id, `📝 Задание:
 ${prompt}
